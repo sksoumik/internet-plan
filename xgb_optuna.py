@@ -3,8 +3,6 @@ import numpy as np
 import os
 from sklearn.model_selection import train_test_split
 import optuna
-
-# import xgb
 import xgboost as xgb
 from sklearn.metrics import confusion_matrix, f1_score
 import functools
@@ -28,8 +26,15 @@ def select_features(train_data):
 # convert categorical columns to numeric
 def encode_categorical_columns(train_data):
     # categorical columns
-    categorical_columns = ["device_type", "device_category", "gender", "district_name"]
+    categorical_columns = [
+        "device_type",
+        "device_category",
+        "gender",
+        "district_name",
+        "age_group",
+    ]
     X_encode = pd.get_dummies(train_data, columns=categorical_columns)
+
     return X_encode
 
 
@@ -54,6 +59,14 @@ def xgb_params():
         "colsample_bytree": 0.8,
         "eta": 0.1,
         "seed": 42,
+        "n_estimators": 100,
+        "early_stopping_rounds": 10,
+        "eval_metric": "mlogloss",
+        "verbosity": 2,
+        "n_jobs": -1,
+        "random_state": 42,
+        # max_delta_step
+        "max_delta_step": 8,
     }
     return params
 
@@ -79,17 +92,19 @@ def objective(trial, X_train, X_test, y_train, y_test):
     # define the params for xgboost
     params = xgb_params()
     # define the learning rate
-    params["eta"] = trial.suggest_uniform("eta", 0.01, 0.2)
+    params["eta"] = trial.suggest_uniform("eta", 0, 1)
     # define the max depth
-    params["max_depth"] = trial.suggest_int("max_depth", 1, 10)
+    params["max_depth"] = trial.suggest_int("max_depth", 1, 100)
     # define the min child weight
-    params["min_child_weight"] = trial.suggest_int("min_child_weight", 1, 10)
+    params["min_child_weight"] = trial.suggest_int("min_child_weight", 0, 100)
     # define the gamma
-    params["gamma"] = trial.suggest_uniform("gamma", 0.1, 0.5)
+    params["gamma"] = trial.suggest_uniform("gamma", 0, 100)
     # define the subsample
-    params["subsample"] = trial.suggest_uniform("subsample", 0.5, 1)
+    params["subsample"] = trial.suggest_uniform("subsample", 0, 1)
     # define the colsample_bytree
-    params["colsample_bytree"] = trial.suggest_uniform("colsample_bytree", 0.5, 1)
+    params["colsample_bytree"] = trial.suggest_uniform("colsample_bytree", 0, 1)
+    # max_delta_step
+    params["max_delta_step"] = trial.suggest_int("max_delta_step", 1, 10)
     # define the seed
     params["seed"] = 42
     # define the number of classes
@@ -105,13 +120,13 @@ def objective(trial, X_train, X_test, y_train, y_test):
     # define the metrics
     params["eval_metric"] = "mlogloss"
     # define the verbosity
-    params["verbosity"] = 1
+    params["verbosity"] = 2
     # define the random state
     params["random_state"] = 42
     # define the number of folds
     params["n_jobs"] = -1
     # define the verbosity
-    params["verbosity"] = 1
+    params["verbosity"] = 2
     # define the random state
     params["random_state"] = 42
 
@@ -146,8 +161,20 @@ def main():
     print(train_data["next_month_plan"].value_counts())
 
     # delete age_group column
-    train_data.drop(["age_group"], axis=1, inplace=True)
-    test_data.drop(["age_group"], axis=1, inplace=True)
+    # train_data.drop(["age_group"], axis=1, inplace=True)
+    # test_data.drop(["age_group"], axis=1, inplace=True)
+
+    map_dict_age_grp = {
+        "30-40": "30_40",
+        "40-50": "40_50",
+        "20-30": "20_30",
+        "50-60": "50_60",
+        "60-70": "60_70",
+        ">70": "more_than_70",
+        "<20": "less_than_20",
+    }
+    train_data["age_group"].replace(map_dict_age_grp, inplace=True)
+    test_data["age_group"].replace(map_dict_age_grp, inplace=True)
 
     # select features
     X, y = select_features(train_data)
@@ -168,7 +195,6 @@ def main():
     f1_score_ = f1_score(y_test, y_pred, average="macro")
     print("Macro F1 Score")
     print(f1_score_)
-
     # save the model
     # model.save_model("model/xgb_model_v2.model")
 
@@ -184,7 +210,7 @@ def main():
         n_trials=100,
     )
     # print the best params
-    print("Best params:")
+    print("\n================= Best Params ===================")
     print(study.best_params)
     # print the best value
     print("Best value:")
@@ -195,6 +221,7 @@ def main():
     ######################### TEST DATA ###############################
 
     test_data = encode_categorical_columns(test_data)
+
     test_data = test_data[X_train.columns]
     # check the model using the test_data
     y_pred_test = model.predict(test_data)
@@ -212,5 +239,4 @@ def main():
 
 
 if __name__ == "__main__":
-    # TODO: add optuna for hyperparameter tuning
     main()
