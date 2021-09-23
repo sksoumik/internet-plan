@@ -49,13 +49,21 @@ def xgb_params():
         "objective": "multi:softprob",
         "num_class": 8,
         "booster": "gbtree",
-        "max_depth": 8,
+        "max_depth": 60,
         "min_child_weight": 2,
         "gamma": 0.4205082386098883,
         "subsample": 0.9343868675741602,
         "colsample_bytree": 0.8782318343801198,
         "eta": 0.07843158576873163,
         "seed": 42,
+        # jobs
+        "n_jobs": -1,
+        # verbosity
+        "verbosity": 2,
+        "n_estimators": 100,
+        # early_stopping_rounds
+        "early_stopping_rounds": 10,
+        "max_delta_step": 6,
     }
     return params
 
@@ -146,7 +154,7 @@ def main():
             "next_month_plan": y_pred_test,
         }
     )
-    submission.to_csv("output/submission_v3.csv", index=False)
+    submission.to_csv("output/submission_v9.csv", index=False)
     print("Target value distribution in the Test data: ")
     print(submission["next_month_plan"].value_counts())
 
